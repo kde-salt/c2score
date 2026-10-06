@@ -5,3 +5,5 @@ dist/
 build/
 .pytest_cache/
 CLAUDE.local.md
+docs/progress.md
+docs/requests/
