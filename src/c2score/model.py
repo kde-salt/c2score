@@ -6,6 +6,7 @@ strings.
 
 from __future__ import annotations
 
+import os
 from collections import deque
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -267,6 +268,22 @@ class Instance:
         Raises ``KeyError`` if there is none.
         """
         return self._by_labels[frozenset(labels)]
+
+    def to_json(self, path: Union[str, os.PathLike[str]]) -> None:
+        """Save this summary to a UTF-8 JSON file; :meth:`from_json` restores it."""
+        from ._instance_json import save
+
+        save(self, path)
+
+    @classmethod
+    def from_json(cls, path: Union[str, os.PathLike[str]]) -> Instance:
+        """Restore a summary saved by :meth:`to_json`.
+
+        A malformed file raises :class:`~c2score.InstanceLoadError`.
+        """
+        from ._instance_json import load
+
+        return load(path)
 
 
 # ---------------------------------------------------------------------------
