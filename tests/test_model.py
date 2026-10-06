@@ -34,9 +34,9 @@ def test_precedence_is_breadth_first():
     assert precedence("a", parents.__getitem__) == ("a", "b", "c", "d", "e")
 
 
-def test_property_spec_equality_ignores_given_flags():
-    assert PropertySpec(DataType.ANY, True, type_given=False) == PropertySpec(DataType.ANY, True)
-    assert hash(PropertySpec(DataType.ANY, True, required_given=False)) == hash(PropertySpec())
+def test_property_spec_defaults():
+    assert PropertySpec() == PropertySpec(DataType.ANY, True)
+    assert hash(PropertySpec()) == hash(PropertySpec(DataType.ANY, True))
 
 
 def test_definitions_are_immutable():
@@ -99,6 +99,16 @@ def test_frozen_dict():
         frozen.x = 1
 
 
+def test_frozen_dict_equality_with_unhashable_values():
+    assert FrozenDict({"a": [1]}) == FrozenDict({"a": [1]})
+    assert FrozenDict({"a": [1]}) != FrozenDict({"a": [2]})
+    assert FrozenDict({"a": [1]}) == {"a": [1]}
+    # Equal contents with cached hashes, and different contents with cached hashes.
+    x, y, z = FrozenDict({"a": 1}), FrozenDict({"a": 1}), FrozenDict({"a": 2})
+    hash(x), hash(y), hash(z)
+    assert x == y and x != z
+
+
 def test_definitions_are_hashable():
     a = NodeTypeDef("a", labels={"A"}, properties={"x": PropertySpec(DataType.STRING)})
     b = NodeTypeDef("a", labels={"A"}, properties={"x": PropertySpec(DataType.STRING)})
@@ -122,3 +132,19 @@ def test_schema_and_instance_pickle():
         edge_types=[InstanceEdgeType({"R"}, {"A"}, {"A"}, Cardinality(ZERO_ONE, ZERO_MANY))],
     )
     assert pickle.loads(pickle.dumps(instance)) == instance
+
+
+def test_instance_requires_endpoint_node_types():
+    with pytest.raises(ValueError, match="no node type with the target labels"):
+        Instance(
+            node_types=[InstanceNodeType({"A"})],
+            edge_types=[InstanceEdgeType({"R"}, {"A"}, {"B"}, Cardinality(ZERO_ONE, ZERO_ONE))],
+        )
+
+
+def test_instance_node_type_lookup():
+    instance = Instance(node_types=[InstanceNodeType(frozenset()), InstanceNodeType({"A", "B"})])
+    assert instance.node_type(["B", "A"]).labels == frozenset({"A", "B"})
+    assert instance.node_type([]).labels == frozenset()
+    with pytest.raises(KeyError):
+        instance.node_type({"A"})

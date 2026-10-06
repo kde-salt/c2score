@@ -1,5 +1,7 @@
 import datetime
+from fractions import Fraction
 
+import numpy as np
 import pytest
 
 from c2score.datatypes import (
@@ -56,6 +58,12 @@ def test_from_neo4j_value_type(value_type, expected):
         ({"a": 1}, D.ANY),
         ([1, 2], D.ANY),
         (datetime.time(12, 0), D.ANY),
+        (np.int64(3), D.INTEGER),
+        (np.int32(3), D.INTEGER),
+        (np.float64(1.5), D.FLOAT),
+        (np.float32(1.5), D.FLOAT),
+        (np.bool_(True), D.BOOLEAN),
+        (Fraction(1, 2), D.FLOAT),
     ],
 )
 def test_from_python_value(value, expected):

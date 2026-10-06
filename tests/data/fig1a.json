@@ -1,0 +1,18 @@
+{
+  "nodes": [
+    { "id": "v1", "labels": ["USER"], "properties": { "id": 1, "bio": "PG lover" } },
+    { "id": "v2", "labels": ["USER"], "properties": { "id": 2 } },
+    { "id": "v3", "labels": ["USER", "OFFICIAL"],
+      "properties": { "id": 3, "verifiedAt": { "$datetime": "2025-12-31" } } },
+    { "id": "v4", "labels": ["USER", "OFFICIAL"],
+      "properties": { "id": 4, "bio": "Graph Lab", "verifiedAt": { "$datetime": "2026-01-04" } } },
+    { "id": "v5", "labels": ["POST"], "properties": { "text": "We love graphs" } },
+    { "id": "v6", "labels": ["POST"], "properties": { "text": "Hello, PG!" } }
+  ],
+  "edges": [
+    { "id": "e1", "labels": ["LIKES"], "source": "v2", "target": "v5", "properties": {} },
+    { "id": "e2", "labels": ["CREATES"], "source": "v1", "target": "v5", "properties": {} },
+    { "id": "e3", "labels": ["LIKES"], "source": "v3", "target": "v5", "properties": {} },
+    { "id": "e4", "labels": ["CREATES"], "source": "v4", "target": "v6", "properties": {} }
+  ]
+}

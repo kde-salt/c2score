@@ -71,9 +71,7 @@ def test_example2_defaults():
     person = schema["personType"]
     name, email = person.properties["name"], person.properties["email"]
     assert (name.type, name.required) == (DataType.ANY, True)
-    assert not name.type_given and not name.required_given
     assert (email.type, email.required) == (DataType.ANY, False)
-    assert not email.type_given and email.required_given
     knows = schema["knowsType"]
     assert knows.cardinality is None
     assert knows.supertypes == ()

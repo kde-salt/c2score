@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import datetime
+import numbers
 from collections.abc import Iterable
 from enum import Enum
 from typing import Any
+
+import numpy as np
 
 
 class DataType(str, Enum):
@@ -64,12 +67,13 @@ def from_python_value(value: Any) -> DataType:
     """
     if value is None:
         raise ValueError("None has no data type; an absent property must be skipped")
-    # bool is a subclass of int, so it must be tested first.
-    if isinstance(value, bool):
+    # bool is a subclass of int, so it must be tested first. numpy.bool_ is
+    # not a numbers.Integral, but is a boolean all the same.
+    if isinstance(value, (bool, np.bool_)):
         return DataType.BOOLEAN
-    if isinstance(value, int):
+    if isinstance(value, numbers.Integral):
         return DataType.INTEGER
-    if isinstance(value, float):
+    if isinstance(value, numbers.Real):
         return DataType.FLOAT
     if isinstance(value, str):
         return DataType.STRING

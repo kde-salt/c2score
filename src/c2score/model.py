@@ -11,8 +11,8 @@ from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Optional, TypeVar, Union
 
-from .cardinality import Cardinality
-from .datatypes import DataType
+from .cardinality import Cardinality, Interval, round_observed
+from .datatypes import DataType, from_python_value, unify
 from .errors import SchemaError
 
 _K = TypeVar("_K")
@@ -45,6 +45,19 @@ class FrozenDict(Mapping[_K, _V]):
             self._hash = hash(frozenset(self._data.items()))
         return self._hash
 
+    def __eq__(self, other: object) -> bool:
+        # Fast path; Mapping.__eq__ copies both sides into new dicts.
+        if isinstance(other, FrozenDict):
+            if self is other:
+                return True
+            # Compare hashes only when both are already known: values need not be hashable.
+            if self._hash is not None and other._hash is not None and self._hash != other._hash:
+                return False
+            return self._data == other._data
+        if isinstance(other, dict):
+            return self._data == other
+        return super().__eq__(other)
+
     def __repr__(self) -> str:
         return f"FrozenDict({self._data!r})"
 
@@ -54,17 +67,10 @@ class FrozenDict(Mapping[_K, _V]):
 
 @dataclass(frozen=True)
 class PropertySpec:
-    """The description of one property: its data type and whether it is required.
-
-    ``type_given`` and ``required_given`` record whether the schema wrote the
-    value or it was filled in with the default. They do not take part in
-    equality or hashing.
-    """
+    """The description of one property: its data type and whether it is required."""
 
     type: DataType = DataType.ANY
     required: bool = True
-    type_given: bool = field(default=True, compare=False)
-    required_given: bool = field(default=True, compare=False)
 
 
 def _freeze_properties(properties: Mapping[str, PropertySpec]) -> Mapping[str, PropertySpec]:
@@ -234,6 +240,7 @@ class Instance:
 
     node_types: tuple[InstanceNodeType, ...] = ()
     edge_types: tuple[InstanceEdgeType, ...] = ()
+    _by_labels: Mapping[frozenset[str], InstanceNodeType] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         nodes = tuple(sorted(self.node_types, key=lambda t: t.key))
@@ -242,5 +249,114 @@ class Instance:
             for previous, current in zip(types, types[1:]):
                 if previous.key == current.key:
                     raise ValueError(f"duplicate instance {kind} type {current.key!r}")
+        by_labels = FrozenDict((node.labels, node) for node in nodes)
+        for edge in edges:
+            for end, labels in (("source", edge.source_labels), ("target", edge.target_labels)):
+                if labels not in by_labels:
+                    raise ValueError(
+                        f"instance edge type {edge.key!r}: no node type with the {end} labels "
+                        f"{_sorted_labels(labels)!r}"
+                    )
         object.__setattr__(self, "node_types", nodes)
         object.__setattr__(self, "edge_types", edges)
+        object.__setattr__(self, "_by_labels", by_labels)
+
+    def node_type(self, labels: Iterable[str]) -> InstanceNodeType:
+        """Return the node type with exactly the label set ``labels``.
+
+        Raises ``KeyError`` if there is none.
+        """
+        return self._by_labels[frozenset(labels)]
+
+
+# ---------------------------------------------------------------------------
+# Abs(G) from an in-memory graph
+# ---------------------------------------------------------------------------
+
+
+class _Group:
+    """The members of one Abs(G) type and the property values they carry."""
+
+    def __init__(self) -> None:
+        self.size = 0
+        self.types: dict[str, set[DataType]] = {}
+        self.counts: dict[str, int] = {}
+
+    def add(self, properties: Mapping[str, Any]) -> None:
+        self.size += 1
+        for key, value in properties.items():
+            # A null value means that the property is absent.
+            if value is None:
+                continue
+            self.counts[key] = self.counts.get(key, 0) + 1
+            self.types.setdefault(key, set()).add(from_python_value(value))
+
+    def properties(self) -> dict[str, PropertySpec]:
+        """Required iff observed on every member (Eq. 7); the type is unified (Section 4.1)."""
+        return {
+            key: PropertySpec(unify(types), self.counts[key] == self.size)
+            for key, types in self.types.items()
+        }
+
+
+def _degree_interval(degrees: Mapping[str, int], members: Iterable[str]) -> Interval:
+    """Round [min, max] of the degrees of ``members``; nodes without an edge count as 0."""
+    observed = [degrees.get(member, 0) for member in members]
+    return round_observed(min(observed), max(observed))
+
+
+def _abs_from_graph(nodes: Iterable[Mapping[str, Any]], edges: Iterable[Mapping[str, Any]]) -> Instance:
+    """Build Abs(G) from nodes and edges in the JSON instance structure.
+
+    Each node is ``{"id", "labels", "properties"}``; each edge is
+    ``{"id", "labels", "source", "target", "properties"}`` where ``source``
+    and ``target`` are node ids. A ``None`` value means an absent property.
+    """
+    node_labels: dict[Any, frozenset[str]] = {}
+    members_of: dict[frozenset[str], list[Any]] = {}
+    node_groups: dict[frozenset[str], _Group] = {}
+    for node in nodes:
+        node_id = node["id"]
+        if node_id in node_labels:
+            raise ValueError(f"duplicate node id {node_id!r}")
+        labels = frozenset(node.get("labels", ()))
+        node_labels[node_id] = labels
+        members_of.setdefault(labels, []).append(node_id)
+        node_groups.setdefault(labels, _Group()).add(node.get("properties", {}))
+
+    EdgeKey = tuple[frozenset[str], frozenset[str], frozenset[str]]
+    edge_ids: set[Any] = set()
+    edge_groups: dict[EdgeKey, _Group] = {}
+    out_degrees: dict[EdgeKey, dict[Any, int]] = {}
+    in_degrees: dict[EdgeKey, dict[Any, int]] = {}
+    for edge in edges:
+        edge_id = edge["id"]
+        if edge_id in edge_ids:
+            raise ValueError(f"duplicate edge id {edge_id!r}")
+        edge_ids.add(edge_id)
+        source, target = edge["source"], edge["target"]
+        for end, node_id in (("source", source), ("target", target)):
+            if node_id not in node_labels:
+                raise ValueError(f"edge {edge_id!r}: unknown {end} node id {node_id!r}")
+        key = (frozenset(edge.get("labels", ())), node_labels[source], node_labels[target])
+        edge_groups.setdefault(key, _Group()).add(edge.get("properties", {}))
+        out_degree = out_degrees.setdefault(key, {})
+        out_degree[source] = out_degree.get(source, 0) + 1
+        in_degree = in_degrees.setdefault(key, {})
+        in_degree[target] = in_degree.get(target, 0) + 1
+
+    node_types = [
+        InstanceNodeType(labels, group.properties()) for labels, group in node_groups.items()
+    ]
+    edge_types = []
+    for key, group in edge_groups.items():
+        labels, source_labels, target_labels = key
+        # Eqs. 10 and 11: every node with the source (target) labels takes part.
+        cardinality = Cardinality(
+            _degree_interval(out_degrees[key], members_of[source_labels]),
+            _degree_interval(in_degrees[key], members_of[target_labels]),
+        )
+        edge_types.append(
+            InstanceEdgeType(labels, source_labels, target_labels, cardinality, group.properties())
+        )
+    return Instance(tuple(node_types), tuple(edge_types))

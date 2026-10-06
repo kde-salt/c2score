@@ -235,8 +235,6 @@ def _properties(element: dict[str, Any]) -> dict[str, PropertySpec]:
         key: PropertySpec(
             type=parse_schema_type(spec["type"]) if "type" in spec else DataType.ANY,
             required=spec.get("required", True),
-            type_given="type" in spec,
-            required_given="required" in spec,
         )
         for key, spec in element.get("properties", {}).items()
     }
