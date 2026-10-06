@@ -9,7 +9,7 @@ the list that writes it. Edge types are then expanded to every pair of
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -73,12 +73,17 @@ class FlatSchema:
     edge_types: tuple[FlatEdgeType, ...]
 
 
-def _merged_labels(chain: Iterable[TypeDef]) -> frozenset[str]:
+def _merged_labels(chain: Sequence[TypeDef]) -> frozenset[str]:
+    if len(chain) == 1:
+        return chain[0].labels
     return frozenset().union(*(definition.labels for definition in chain))
 
 
-def _merged_properties(chain: Iterable[TypeDef]) -> FrozenDict[str, PropertySpec]:
+def _merged_properties(chain: Sequence[TypeDef]) -> Mapping[str, PropertySpec]:
     """For each key, the description written by the first definition in the chain."""
+    if len(chain) == 1:
+        # Already a FrozenDict; sharing it keeps its cached hash.
+        return chain[0].properties
     merged: dict[str, PropertySpec] = {}
     for definition in chain:
         for key, spec in definition.properties.items():
@@ -88,19 +93,25 @@ def _merged_properties(chain: Iterable[TypeDef]) -> FrozenDict[str, PropertySpec
 
 def _chain(schema: Schema, definition: TypeDef) -> list[TypeDef]:
     """The definitions of ``prec(definition)``, nearest first."""
+    if not definition.supertypes:
+        return [definition]
     try:
         return [schema[type_id] for type_id in schema.precedence(definition.id)]
     except KeyError as e:
         raise SchemaError(f"{definition.id!r}: unknown supertype id {e.args[0]!r}") from None
 
 
-def inherited_endpoint(schema: Schema, edge: EdgeTypeDef, end: str) -> Optional[str]:
-    """The ``source`` or ``target`` of an edge definition, possibly inherited; ``None`` if undetermined."""
-    for definition in _chain(schema, edge):
+def _endpoint(chain: Sequence[TypeDef], end: str) -> Optional[str]:
+    for definition in chain:
         endpoint = getattr(definition, end)
         if endpoint is not None:
             return endpoint
     return None
+
+
+def inherited_endpoint(schema: Schema, edge: EdgeTypeDef, end: str) -> Optional[str]:
+    """The ``source`` or ``target`` of an edge definition, possibly inherited; ``None`` if undetermined."""
+    return _endpoint(_chain(schema, edge), end)
 
 
 def _descendants(schema: Schema) -> dict[str, list[str]]:
@@ -137,8 +148,9 @@ def flatten(schema: Schema) -> FlatSchema:
 
     descendants = _descendants(schema)
     # Eq. 21: E(S+) is a set; equal elements are merged and remember all origins.
-    elements: dict[tuple[object, ...], FlatEdgeType] = {}
-    origins: dict[tuple[object, ...], set[str]] = {}
+    # A key compares the properties as a mapping, which is the same as
+    # comparing their sets of items.
+    origins: dict[tuple[object, ...], list[str]] = {}
     for edge in schema.edge_types:
         chain = _chain(schema, edge)
         labels = _merged_labels(chain)
@@ -146,7 +158,7 @@ def flatten(schema: Schema) -> FlatSchema:
         cardinality = next((d.cardinality for d in chain if d.cardinality is not None), None)
         ends = []
         for end in ("source", "target"):
-            endpoint = inherited_endpoint(schema, edge, end)
+            endpoint = _endpoint(chain, end)
             if endpoint is None:
                 raise SchemaError(f"{edge.id!r}: {end} is not determined")
             if endpoint not in flat_nodes:
@@ -154,19 +166,19 @@ def flatten(schema: Schema) -> FlatSchema:
             ends.append(endpoint)
         source, target = ends
         # Eqs. 18-19: the Cartesian product of the endpoints and their descendants.
+        target_ids = descendants[target]
         for source_id in descendants[source]:
-            for target_id in descendants[target]:
-                key = (labels, frozenset(properties.items()), cardinality, source_id, target_id)
-                if key not in elements:
-                    elements[key] = FlatEdgeType(
-                        labels, properties, cardinality, flat_nodes[source_id], flat_nodes[target_id]
-                    )
-                    origins[key] = set()
-                origins[key].add(edge.id)
+            for target_id in target_ids:
+                key = (labels, properties, cardinality, source_id, target_id)
+                found = origins.get(key)
+                if found is None:
+                    origins[key] = [edge.id]
+                elif found[-1] != edge.id:
+                    found.append(edge.id)
 
     edge_types = [
-        FlatEdgeType(e.labels, e.properties, e.cardinality, e.source, e.target, frozenset(origins[key]))
-        for key, e in elements.items()
+        FlatEdgeType(labels, properties, cardinality, flat_nodes[source_id], flat_nodes[target_id], frozenset(ids))
+        for (labels, properties, cardinality, source_id, target_id), ids in origins.items()
     ]
     edge_types.sort(key=lambda e: (e.schema_type, e.source.id, e.target.id))
     node_types = sorted(flat_nodes.values(), key=lambda n: n.id)
