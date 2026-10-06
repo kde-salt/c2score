@@ -53,13 +53,21 @@ _EDGE_PROPERTIES = (
 # (5) Degree bounds per group, over the nodes with at least one such edge.
 # The degree of a node v is counted per (edge type, label set of the other
 # end); the other end's labels are sorted once per group, not per edge.
+# The per-node counts are aggregated inside a COLLECT subquery, one node at a
+# time: grouping by v over the whole graph keeps one entry per node and edge
+# group, which exceeds the server's transaction memory on large graphs.
 def _degree_query(pattern: str) -> str:
     return (
+        "MATCH (v) "
+        "WITH v, COLLECT { "
         f"MATCH {pattern} "
-        "WITH v, type(r) AS rt, labels(w) AS raw, count(r) AS c "
-        f"WITH v, rt, {_sorted_labels('raw')} AS other, sum(c) AS d "
-        f"RETURN {_sorted_labels('labels(v)')} AS ls, rt, other, "
-        "min(d) AS dmin, max(d) AS dmax, count(v) AS n"
+        "WITH type(r) AS rt, labels(w) AS raw, count(r) AS c "
+        f"WITH rt, {_sorted_labels('raw')} AS other, sum(c) AS d "
+        "RETURN {rt: rt, other: other, d: d} "
+        "} AS groups "
+        "UNWIND groups AS g "
+        f"RETURN {_sorted_labels('labels(v)')} AS ls, g.rt AS rt, g.other AS other, "
+        "min(g.d) AS dmin, max(g.d) AS dmax, count(v) AS n"
     )
 
 
