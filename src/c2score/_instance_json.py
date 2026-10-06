@@ -26,6 +26,10 @@ from .model import Instance, InstanceEdgeType, InstanceNodeType, PropertySpec
 FORMAT = "c2score-instance"
 VERSION = 1
 
+_TOP_LEVEL_KEYS = ("format", "version", "node_types", "edge_types")
+_NODE_KEYS = ("labels", "properties")
+_EDGE_KEYS = ("labels", "source_labels", "target_labels", "cardinality", "properties")
+
 PathLike = Union[str, "os.PathLike[str]"]
 
 
@@ -67,6 +71,17 @@ def save(instance: Instance, path: PathLike) -> None:
         f.write("\n")
 
 
+def _check_keys(value: Mapping[str, Any], keys: tuple[str, ...], where: str) -> None:
+    """Reject missing and unknown keys, so that a misspelled key is not silently ignored."""
+    for key in keys:
+        if key not in value:
+            raise ValueError(f"{where}missing key {key!r}")
+    unknown = [key for key in value if key not in keys]
+    if unknown:
+        listed = ", ".join(repr(key) for key in unknown)
+        raise ValueError(f"{where}unknown key{'s' if len(unknown) > 1 else ''} {listed}")
+
+
 def _labels(value: Any, where: str) -> frozenset[str]:
     if not isinstance(value, list) or not all(isinstance(label, str) for label in value):
         raise ValueError(f"{where}: expected a list of strings, got {value!r}")
@@ -100,22 +115,29 @@ def _list(data: Mapping[str, Any], key: str) -> list[Any]:
 def instance_from_dict(data: Any) -> Instance:
     """Rebuild an :class:`Instance` from :func:`instance_to_dict` output.
 
-    Raises ``ValueError`` (or ``KeyError``) on malformed input.
+    Raises ``ValueError`` on malformed input, including missing and unknown keys.
     """
     if not isinstance(data, dict) or data.get("format") != FORMAT:
         raise ValueError(f"not a c2score instance file (expected \"format\": {FORMAT!r})")
-    if data.get("version") != VERSION:
-        raise ValueError(f"unsupported version {data.get('version')!r}; this c2score reads version {VERSION}")
-    node_types = [
-        InstanceNodeType(
-            _labels(node["labels"], f"node_types[{i}].labels"),
-            _load_properties(node["properties"], f"node_types[{i}].properties"),
+    version = data.get("version")
+    # The version is an integer; True and 1.0 compare equal to 1 but are not accepted.
+    if type(version) is not int or version != VERSION:
+        raise ValueError(f"unsupported version {version!r}; this c2score reads version {VERSION}")
+    _check_keys(data, _TOP_LEVEL_KEYS, "")
+    node_types = []
+    for i, node in enumerate(_list(data, "node_types")):
+        where = f"node_types[{i}]"
+        _check_keys(node, _NODE_KEYS, f"{where}: ")
+        node_types.append(
+            InstanceNodeType(
+                _labels(node["labels"], f"{where}.labels"),
+                _load_properties(node["properties"], f"{where}.properties"),
+            )
         )
-        for i, node in enumerate(_list(data, "node_types"))
-    ]
     edge_types = []
     for i, edge in enumerate(_list(data, "edge_types")):
         where = f"edge_types[{i}]"
+        _check_keys(edge, _EDGE_KEYS, f"{where}: ")
         cardinality = edge["cardinality"]
         if not isinstance(cardinality, dict) or set(cardinality) != {"out", "in"}:
             raise ValueError(f"{where}.cardinality: expected {{\"out\", \"in\"}}, got {cardinality!r}")
@@ -139,7 +161,5 @@ def load(path: PathLike) -> Instance:
         return instance_from_dict(json.loads(raw.decode("utf-8")))
     except (UnicodeDecodeError, json.JSONDecodeError) as e:
         raise InstanceLoadError(f"invalid instance file ({origin}): not valid UTF-8 JSON: {e}") from e
-    except KeyError as e:
-        raise InstanceLoadError(f"invalid instance file ({origin}): missing key {e}") from e
     except ValueError as e:
         raise InstanceLoadError(f"invalid instance file ({origin}): {e}") from e
