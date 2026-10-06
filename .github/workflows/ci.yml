@@ -20,3 +20,40 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Test
         run: python -m pytest
+
+  neo4j:
+    # Integration test #3 against a real Neo4j server.
+    runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:5.26.0-community
+        env:
+          NEO4J_AUTH: neo4j/c2score-ci
+        ports:
+          - 7687:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p c2score-ci 'RETURN 1'"
+          --health-interval 5s
+          --health-timeout 10s
+          --health-retries 30
+    env:
+      C2SCORE_TEST_NEO4J_URI: bolt://localhost:7687
+      C2SCORE_TEST_NEO4J_USER: neo4j
+      C2SCORE_TEST_NEO4J_PASSWORD: c2score-ci
+      # Community edition has a single user database.
+      C2SCORE_TEST_NEO4J_DATABASE: neo4j
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Test
+        # bash here means -eo pipefail, so a pytest failure is not hidden by tee.
+        # Also fail if the tests were skipped instead of run.
+        shell: bash
+        run: |
+          set -o pipefail
+          python -m pytest tests/test_neo4j_integration.py -v -rs | tee pytest.log
+          ! grep -q SKIPPED pytest.log
