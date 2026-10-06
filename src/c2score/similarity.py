@@ -92,6 +92,27 @@ def sim_v(t: InstanceNodeType, s: FlatNodeType, params: SimilarityParams) -> flo
     return _attributes(d_lab, t.properties, s.properties, params)
 
 
+def _edge_score(
+    t: InstanceEdgeType,
+    s: FlatEdgeType,
+    d_lab: float,
+    source_sim: float,
+    target_sim: float,
+    params: SimilarityParams,
+) -> float:
+    """Eq. 34 for a pair that passed the label check and the endpoint filter.
+
+    ``source_sim`` and ``target_sim`` are sim_V of the endpoints (for D_end).
+    """
+    d_attr = _attributes(d_lab, t.properties, s.properties, params)
+    w_attr, w_end, w_card = params.edge_weights
+    d_end = (source_sim + target_sim) / 2
+    score = w_attr * d_attr + w_end * d_end
+    if w_card != 0:
+        score += w_card * d_card(t.cardinality, s.cardinality or DEFAULT_CARDINALITY)
+    return score
+
+
 def sim_e(
     t: InstanceEdgeType,
     s: FlatEdgeType,
@@ -110,56 +131,64 @@ def sim_e(
         return 0.0
     if node_sim is None:
         node_sim = lambda u, v: sim_v(u, v, params)  # noqa: E731
-    d_attr = _attributes(d_lab, t.properties, s.properties, params)
-    w_attr, w_end, w_card = params.edge_weights
-    d_end = (
-        node_sim(instance.node_type(t.source_labels), s.source)
-        + node_sim(instance.node_type(t.target_labels), s.target)
-    ) / 2
-    score = w_attr * d_attr + w_end * d_end
-    if w_card != 0:
-        score += w_card * d_card(t.cardinality, s.cardinality or DEFAULT_CARDINALITY)
-    return score
+    return _edge_score(
+        t,
+        s,
+        d_lab,
+        node_sim(instance.node_type(t.source_labels), s.source),
+        node_sim(instance.node_type(t.target_labels), s.target),
+        params,
+    )
+
+
+#: The key that stands for an empty label set in the label indexes: two empty
+#: sets have a Dice coefficient of 1, but share no label.
+NO_LABEL = None
+
+
+def label_keys(labels: AbstractSet[str]) -> AbstractSet[Optional[str]]:
+    """The keys under which a label set is indexed: its labels, or :data:`NO_LABEL` if it is empty.
+
+    Two label sets have a positive Dice coefficient exactly when their keys overlap.
+    """
+    return labels if labels else (NO_LABEL,)  # type: ignore[return-value]
 
 
 class Similarity:
-    """sim_V and sim_E for one instance and one set of parameters, with a cache.
+    """sim_V and sim_E for one instance and one set of parameters.
 
-    For each flattened type, the similarities to all instance types are
-    computed once and kept as a vector (in the instance's type order). The
-    cache keys are the flattened types, which compare by content, so the
-    cache stays valid across the reduced schemas that Conciseness flattens.
+    sim_V is computed per flattened node type for all instance node types at
+    once (a column) and cached by content, so the cache stays valid across
+    the reduced schemas that Conciseness flattens. Only the instance node
+    types that pass the label check are computed; the others are 0 (Eq. 28).
     """
 
     def __init__(self, instance: Instance, params: SimilarityParams) -> None:
         self.instance = instance
         self.params = params
-        self._node_index = {t: i for i, t in enumerate(instance.node_types)}
-        self._edge_index = {t: i for i, t in enumerate(instance.edge_types)}
+        self.node_index = {t: i for i, t in enumerate(instance.node_types)}
+        self._rows_by_label: dict[Optional[str], list[int]] = {}
+        for i, t in enumerate(instance.node_types):
+            for key in label_keys(t.labels):
+                self._rows_by_label.setdefault(key, []).append(i)
         self._node_scores: dict[FlatNodeType, np.ndarray] = {}
-        self._edge_scores: dict[FlatEdgeType, np.ndarray] = {}
 
     def node_scores(self, s: FlatNodeType) -> np.ndarray:
         """sim_V(t, s) for every instance node type t."""
         scores = self._node_scores.get(s)
         if scores is None:
-            scores = np.array([sim_v(t, s, self.params) for t in self.instance.node_types], dtype=float)
+            scores = np.zeros(len(self.instance.node_types), dtype=float)
+            rows: set[int] = set()
+            for key in label_keys(s.labels):
+                rows.update(self._rows_by_label.get(key, ()))
+            types = self.instance.node_types
+            for i in rows:
+                scores[i] = sim_v(types[i], s, self.params)
             self._node_scores[s] = scores
         return scores
 
-    def edge_scores(self, s: FlatEdgeType) -> np.ndarray:
-        """sim_E(t, s) for every instance edge type t."""
-        scores = self._edge_scores.get(s)
-        if scores is None:
-            scores = np.array(
-                [sim_e(t, s, self.instance, self.params, self.node) for t in self.instance.edge_types],
-                dtype=float,
-            )
-            self._edge_scores[s] = scores
-        return scores
-
     def node(self, t: InstanceNodeType, s: FlatNodeType) -> float:
-        return float(self.node_scores(s)[self._node_index[t]])
+        return float(self.node_scores(s)[self.node_index[t]])
 
     def edge(self, t: InstanceEdgeType, s: FlatEdgeType) -> float:
-        return float(self.edge_scores(s)[self._edge_index[t]])
+        return sim_e(t, s, self.instance, self.params, self.node)

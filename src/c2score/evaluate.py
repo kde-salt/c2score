@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from .conciseness import ConcisenessResult, conciseness
-from .coverage import Match, cov_e, cov_v
+from .coverage import CoverageTables, Match
 from .datatypes import DataType
 from .errors import ParameterError, SchemaError
 from .flatten import flatten
@@ -248,7 +248,10 @@ def evaluate(
     )
     similarity = Similarity(instance, params.similarity)
     flat = flatten(schema)
-    cov_v_value, node_matches = cov_v(flat, similarity)
-    cov_e_value, edge_matches = cov_e(flat, similarity)
-    con = conciseness(schema, flat, cov_v_value, cov_e_value, similarity, params.redundancy_ratio)
+    tables = CoverageTables(flat, similarity)
+    cov_v_value, node_matches = tables.cov_v()
+    cov_e_value, edge_matches = tables.cov_e()
+    con = conciseness(
+        schema, flat, cov_v_value, cov_e_value, similarity, params.redundancy_ratio, tables=tables
+    )
     return _result(params, cov_v_value, cov_e_value, node_matches, edge_matches, con)
