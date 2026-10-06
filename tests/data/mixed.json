@@ -1,0 +1,32 @@
+{
+  "nodes": [
+    { "id": "a1", "labels": ["Person"],
+      "properties": { "name": "Ann", "born": { "$datetime": "1990-04-01" }, "score": 1, "tags": ["x", "y"] } },
+    { "id": "a2", "labels": ["Person"],
+      "properties": { "name": "Bob", "born": { "$datetime": "1985-12-24T08:30:00Z" }, "score": 2.5 } },
+    { "id": "a3", "labels": ["Person", "ns:Admin"],
+      "properties": { "name": "Cy", "code": "C-1" } },
+    { "id": "a4", "labels": ["Person", "ns:Admin"],
+      "properties": { "name": "Di", "code": 7 } },
+    { "id": "u1", "labels": [], "properties": { "note": "no label" } },
+    { "id": "u2", "labels": [], "properties": {} },
+    { "id": "d1", "labels": ["Doc"],
+      "properties": { "title": "A", "at": { "$datetime": "2024-05-01T12:00:00" }, "flag": true } },
+    { "id": "d2", "labels": ["Doc"],
+      "properties": { "title": "B", "at": { "$datetime": "2024-06-01" }, "flag": false } }
+  ],
+  "edges": [
+    { "id": "e1", "labels": ["WROTE"], "source": "a1", "target": "d1",
+      "properties": { "since": { "$datetime": "2020-01-01" }, "weight": 3 } },
+    { "id": "e2", "labels": ["WROTE"], "source": "a1", "target": "d2",
+      "properties": { "since": { "$datetime": "2021-02-03T04:05:06Z" } } },
+    { "id": "e3", "labels": ["WROTE"], "source": "a2", "target": "d2",
+      "properties": { "weight": 0.5, "parts": [1, 2] } },
+    { "id": "e4", "labels": ["has:part"], "source": "d1", "target": "d2", "properties": { "order": 1 } },
+    { "id": "e5", "labels": ["LINKS"], "source": "u1", "target": "u2", "properties": {} },
+    { "id": "e6", "labels": ["LINKS"], "source": "u1", "target": "u1", "properties": { "self": true } },
+    { "id": "e7", "labels": ["MANAGES"], "source": "a3", "target": "a1", "properties": {} },
+    { "id": "e8", "labels": ["MANAGES"], "source": "a3", "target": "a2", "properties": {} },
+    { "id": "e9", "labels": ["MANAGES"], "source": "a4", "target": "u2", "properties": {} }
+  ]
+}

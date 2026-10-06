@@ -108,7 +108,10 @@ def _load(driver: neo4j.Driver, database: Optional[str]) -> Instance:
     try:
         with driver.session(database=database, default_access_mode=neo4j.READ_ACCESS) as session:
             # One explicit transaction: no automatic retries, so an unreachable
-            # server fails at once, and all queries see the same transaction.
+            # server fails at once. Neo4j isolates transactions at read committed,
+            # so the queries do not see one snapshot: if the graph is written
+            # meanwhile, the counts may disagree (InstanceLoadError below) or the
+            # summary may mix the states before and after the write.
             with session.begin_transaction() as tx:
                 _check_version(_rows(tx, _VERSION_QUERY))
                 rows = {
