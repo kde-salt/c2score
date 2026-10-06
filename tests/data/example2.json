@@ -1,0 +1,9 @@
+{
+  "node_types": [
+    { "id": "personType", "labels": ["Person"],
+      "properties": { "name": {}, "email": { "required": false } } }
+  ],
+  "edge_types": [
+    { "id": "knowsType", "labels": ["KNOWS"], "source": "personType", "target": "personType" }
+  ]
+}

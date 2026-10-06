@@ -1,0 +1,19 @@
+{
+  "node_types": [
+    { "id": "personType", "labels": ["Person"],
+      "properties": { "name": { "type": "STRING" }, "email": { "type": "STRING", "required": false } } },
+    { "id": "employeeType", "labels": ["Employee"], "supertypes": ["personType"],
+      "properties": { "email": { "type": "STRING", "required": true }, "salary": { "type": "FLOAT" } } },
+    { "id": "shareholderType", "labels": ["Shareholder"], "supertypes": ["personType"],
+      "properties": { "email": { "type": "STRING", "required": false }, "shares": { "type": "INTEGER" } } },
+    { "id": "managerType", "labels": ["Manager"], "supertypes": ["employeeType", "shareholderType"] },
+    { "id": "companyType", "labels": ["Company"], "properties": { "name": { "type": "STRING" } } }
+  ],
+  "edge_types": [
+    { "id": "worksAtType", "labels": ["WORKS_AT"], "source": "employeeType", "target": "companyType",
+      "properties": { "since": { "type": "DATETIME" } },
+      "cardinality": { "out": "1..1", "in": "0..*" } },
+    { "id": "managesType", "labels": ["MANAGES"], "supertypes": ["worksAtType"], "source": "managerType",
+      "properties": { "since": { "type": "DATETIME", "required": false } } }
+  ]
+}

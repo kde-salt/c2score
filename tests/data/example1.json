@@ -1,0 +1,22 @@
+{
+  "format": "c2score-schema",
+  "version": "1",
+  "node_types": [
+    { "id": "userType", "labels": ["USER"],
+      "properties": { "id": { "type": "INTEGER" } } },
+    { "id": "officialType", "labels": ["OFFICIAL"], "supertypes": ["userType"],
+      "properties": { "verifiedAt": { "type": "DATETIME" } } },
+    { "id": "postType1", "labels": ["POST"],
+      "properties": { "text": { "type": "STRING" } } },
+    { "id": "postType2", "labels": ["POST"],
+      "properties": { "text": { "type": "STRING" } } }
+  ],
+  "edge_types": [
+    { "id": "likesType", "labels": ["LIKES"], "source": "userType", "target": "postType1",
+      "cardinality": { "out": "0..*", "in": "0..*" } },
+    { "id": "createsType1", "labels": ["CREATES"], "source": "userType", "target": "postType1",
+      "cardinality": { "out": "1..1", "in": "0..*" } },
+    { "id": "createsType2", "labels": ["CREATES"], "source": "userType", "target": "postType2",
+      "cardinality": { "out": "1..1", "in": "0..*" } }
+  ]
+}

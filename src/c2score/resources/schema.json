@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/kde-salt/c2score/blob/main/src/c2score/resources/schema.json",
+  "title": "c2score schema file",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "format": { "const": "c2score-schema" },
+    "version": { "type": "string" },
+    "node_types": { "type": "array", "items": { "$ref": "#/$defs/nodeType" } },
+    "edge_types": { "type": "array", "items": { "$ref": "#/$defs/edgeType" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "minLength": 1 },
+    "labels": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    },
+    "property": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "minLength": 1 },
+        "required": { "type": "boolean" }
+      }
+    },
+    "properties": {
+      "type": "object",
+      "propertyNames": { "minLength": 1 },
+      "additionalProperties": { "$ref": "#/$defs/property" }
+    },
+    "supertypes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/id" },
+      "uniqueItems": true
+    },
+    "bound": { "enum": ["0..1", "0..*", "1..1", "1..*"] },
+    "cardinality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["out", "in"],
+      "properties": {
+        "out": { "$ref": "#/$defs/bound" },
+        "in": { "$ref": "#/$defs/bound" }
+      }
+    },
+    "nodeType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "labels": { "$ref": "#/$defs/labels" },
+        "properties": { "$ref": "#/$defs/properties" },
+        "supertypes": { "$ref": "#/$defs/supertypes" }
+      }
+    },
+    "edgeType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "labels": { "$ref": "#/$defs/labels" },
+        "properties": { "$ref": "#/$defs/properties" },
+        "supertypes": { "$ref": "#/$defs/supertypes" },
+        "source": { "$ref": "#/$defs/id" },
+        "target": { "$ref": "#/$defs/id" },
+        "cardinality": { "$ref": "#/$defs/cardinality" }
+      }
+    }
+  }
+}
