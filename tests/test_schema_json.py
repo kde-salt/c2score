@@ -285,6 +285,20 @@ def test_r10_cycle_of_edge_types():
     assert_rejected(data, "inheritance cycle", "r1 -> r3 -> r2 -> r1")
 
 
+def test_r10_cycle_is_reported_where_it_closes():
+    # The search goes a -> b -> c, and c's second supertype closes the cycle.
+    data = {
+        "node_types": [
+            {"id": "a", "supertypes": ["b"]},
+            {"id": "b", "supertypes": ["c"]},
+            {"id": "c", "supertypes": ["z", "a"]},
+            {"id": "z"},
+        ]
+    }
+    message = assert_rejected(data, "node_types[2] (id='c').supertypes[1]: inheritance cycle a -> b -> c -> a")
+    assert message.count("inheritance cycle") == 1
+
+
 def test_r10_deep_hierarchy_without_cycle():
     depth = 5000
     data = {"node_types": [{"id": f"t{i}", "supertypes": [f"t{i + 1}"]} for i in range(depth)] + [{"id": f"t{depth}"}]}
@@ -339,7 +353,7 @@ def test_r12_endpoint_inherited_from_any_ancestor():
     assert schema.precedence("b") == ("b", "a", "worksAtType")
 
 
-@pytest.mark.parametrize("type_name", ["DATE", "TEXT", "list"])
+@pytest.mark.parametrize("type_name", ["DATE", "TEXT", "list", "\u017ftring", "str\u0131ng"])
 def test_r13_unknown_type(type_name):
     data = base()
     data["edge_types"][0]["properties"] = {"since": {"type": type_name}}
@@ -357,3 +371,101 @@ def test_reports_every_violation_of_a_phase():
 def test_schema_error_is_value_error():
     with pytest.raises(ValueError):
         load_schema_json({"format": "x"})
+
+
+# ---------------------------------------------------------------------------
+# References to a duplicated id
+# ---------------------------------------------------------------------------
+
+
+def test_r8_duplicate_id_does_not_cause_r9_errors():
+    # The edge type 'companyType' duplicates a node type id; references to the
+    # ambiguous id are not checked again, so only R8 is reported.
+    data = base()
+    data["edge_types"].append({"id": "companyType", "source": "personType", "target": "personType"})
+    data["edge_types"].append({"id": "r", "supertypes": ["companyType"]})
+    data["node_types"].append({"id": "employeeType", "supertypes": ["companyType"]})
+    message = assert_rejected(data, "duplicate id 'companyType'")
+    assert message.count("\n  ") == 1
+    assert "supertypes" not in message
+
+
+def test_r8_duplicate_id_does_not_cause_r11_errors():
+    data = base()
+    data["edge_types"].append({"id": "personType", "source": "companyType", "target": "companyType"})
+    data["edge_types"].append({"id": "r", "source": "personType", "target": "personType"})
+    message = assert_rejected(data, "duplicate id 'personType'")
+    assert message.count("\n  ") == 1
+
+
+def test_r9_and_r11_still_checked_for_other_ids_when_an_id_is_duplicated():
+    data = base()
+    data["node_types"].append({"id": "personType"})
+    data["edge_types"].append({"id": "r", "supertypes": ["missingType"], "target": "worksAtType"})
+    assert_rejected(
+        data,
+        "duplicate id 'personType'",
+        "edge_types[1] (id='r').supertypes[0]: unknown id 'missingType'",
+        "edge_types[1] (id='r').target: 'worksAtType' is not a node type",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Keys of a dict source
+# ---------------------------------------------------------------------------
+
+
+def test_non_string_property_name_is_rejected():
+    data = base()
+    data["node_types"][0]["properties"][1] = {"type": "STRING"}
+    assert_rejected(data, "node_types[0] (id='personType').properties: key 1 is not a string")
+
+
+@pytest.mark.parametrize(
+    "mutate, fragment",
+    [
+        (lambda d: d.update({1: []}), "<root>: key 1 is not a string"),
+        (lambda d: d["node_types"][1].update({None: 1}), "node_types[1] (id='companyType'): key None is not a string"),
+        (
+            lambda d: d["node_types"][0]["properties"]["name"].update({("type",): "STRING"}),
+            "node_types[0] (id='personType').properties.name: key ('type',) is not a string",
+        ),
+    ],
+)
+def test_non_string_keys_are_rejected_anywhere(mutate, fragment):
+    data = base()
+    mutate(data)
+    assert_rejected(data, fragment)
+
+
+# ---------------------------------------------------------------------------
+# Long values are shortened in messages
+# ---------------------------------------------------------------------------
+
+LONG = "A" * 5000
+
+
+@pytest.mark.parametrize(
+    "mutate, fragment",
+    [
+        (lambda d: d["node_types"][0].update(labels=LONG), "is not of type 'array'"),
+        (lambda d: d["node_types"][0].update(labels=[LONG, LONG]), "has non-unique elements"),
+        (lambda d: d["node_types"][0].update({LONG: 1}), "was unexpected"),
+        (lambda d: d["node_types"][0]["properties"].update(p={"required": LONG}), "is not of type 'boolean'"),
+        (lambda d: d["node_types"][0]["properties"].update(p={"type": LONG}), "unknown type"),
+        (lambda d: d["edge_types"][0].update(cardinality={"out": LONG, "in": "0..*"}), "is not one of"),
+        (lambda d: d["node_types"].append({"id": LONG, "supertypes": [LONG + "x"]}), "unknown id"),
+        (lambda d: d["node_types"].extend([{"id": LONG}, {"id": LONG}]), "duplicate id"),
+    ],
+)
+def test_long_values_are_shortened(mutate, fragment):
+    data = base()
+    mutate(data)
+    message = assert_rejected(data, fragment, "...")
+    assert len(message) < 500
+
+
+def test_many_unknown_keys_are_listed_briefly():
+    data = base()
+    data["node_types"][0].update({f"k{i}": 1 for i in range(8)})
+    assert_rejected(data, "('k0', 'k1', 'k2', 'k3', 'k4' and 3 more were unexpected)")
