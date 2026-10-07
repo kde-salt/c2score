@@ -24,7 +24,7 @@ First release.
   that can match, and Conciseness reuses the computed similarities when removing a definition
   does not change the rest of the flattened schema. A DBpedia graph with about 20 million nodes
   and 45 million edges loads in about 6 minutes and is evaluated against a schema with about
-  180,000 edge definitions in about 8 minutes (see "Performance" in the README).
+  180,000 edge definitions in about 8 minutes.
 
-The ways in which the computation refines the definitions of the paper are listed in the README
-("How the library computes C2-score").
+The library refines the definitions of the paper, so its scores can differ from those reported in
+the paper. To reproduce the results of the paper, use https://github.com/kde-salt/C2-SCORE.
