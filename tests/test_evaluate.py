@@ -3,6 +3,7 @@ import math
 from fractions import Fraction
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from c2score import EvaluationResult, ParameterError, SchemaError, evaluate, load_schema_json
@@ -429,6 +430,40 @@ def test_invalid_parameters(kwargs, name):
     with pytest.raises(ParameterError, match=name) as info:
         evaluate(fig1a(), example(1), **kwargs)
     assert repr(next(iter(kwargs.values()))) in str(info.value)
+
+
+def test_numpy_parameters():
+    # Numpy values are accepted, and params holds plain Python values.
+    plain = evaluate(fig1a(), example(1), edge_weights=(0.5, 0.25, 0.25), use_types=True, allow_any=False)
+    result = evaluate(
+        fig1a(),
+        example(1),
+        label_weight=np.float64(0.5),
+        edge_weights=np.array([0.5, 0.25, 0.25]),
+        redundancy_ratio=np.float32(0.15),
+        use_types=np.True_,
+        allow_any=np.False_,
+    )
+    assert result.c2 == plain.c2
+    assert result.params == {**plain.params, "redundancy_ratio": float(np.float32(0.15))}
+    assert type(result.params["edge_weights"][0]) is float
+    assert type(result.params["use_types"]) is bool
+    assert type(result.params["allow_any"]) is bool
+    json.dumps(result.to_dict())
+
+
+@pytest.mark.parametrize(
+    ("edge_weights", "fragment"),
+    [
+        (np.array([[0.5, 0.25, 0.25]]), "sequence of three numbers"),
+        (np.array([0.5, 0.5]), "sequence of three numbers"),
+        (np.array([0.5, 0.6, -0.1]), r"edge_weights\[2\]"),
+        (np.array([True, False, False]), r"edge_weights\[0\]"),
+    ],
+)
+def test_invalid_numpy_edge_weights(edge_weights, fragment):
+    with pytest.raises(ParameterError, match=fragment):
+        evaluate(fig1a(), example(1), edge_weights=edge_weights)
 
 
 def test_valid_boundary_parameters():

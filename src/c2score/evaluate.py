@@ -9,6 +9,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Optional
 
+import numpy as np
+
 from .conciseness import ConcisenessResult, conciseness
 from .coverage import CoverageTables, Match
 from .datatypes import DataType
@@ -31,6 +33,9 @@ class EvaluationResult:
     ``"node_types"`` and ``"edge_types"``. ``best_matches`` gives, for each
     instance type, the schema type with the highest similarity. ``params``
     records the parameters actually used.
+
+    The dataclass is frozen, but these dicts and lists are not: modifying
+    them modifies the result. :meth:`to_dict` returns an independent copy.
     """
 
     c2: float
@@ -78,14 +83,16 @@ def _check_unit(name: str, value: Any) -> float:
 
 
 def _check_bool(name: str, value: Any) -> bool:
-    if not isinstance(value, bool):
+    if not isinstance(value, (bool, np.bool_)):
         raise ParameterError(f"{name} must be True or False, got {value!r}")
-    return value
+    return bool(value)
 
 
 def _check_edge_weights(value: Any) -> Optional[tuple[float, float, float]]:
     if value is None:
         return None
+    if isinstance(value, np.ndarray) and value.ndim == 1:
+        value = value.tolist()
     if isinstance(value, (str, bytes)) or not isinstance(value, Sequence) or len(value) != 3:
         raise ParameterError(f"edge_weights must be None or a sequence of three numbers, got {value!r}")
     try:
