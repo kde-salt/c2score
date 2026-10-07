@@ -227,6 +227,20 @@ def test_r7_not_utf8(tmp_path):
     assert_rejected(path, "not valid UTF-8")
 
 
+@pytest.mark.parametrize("name", EXAMPLES)
+def test_utf8_with_byte_order_mark(tmp_path, name):
+    path = tmp_path / name
+    path.write_bytes(b"\xef\xbb\xbf" + (DATA / name).read_bytes())
+    assert load_schema_json(path) == load_schema_json(DATA / name)
+
+
+def test_byte_order_mark_only_at_the_start(tmp_path):
+    # A second byte order mark is not whitespace, so the JSON is broken.
+    path = tmp_path / "schema.json"
+    path.write_bytes(b"\xef\xbb\xbf\xef\xbb\xbf{}")
+    assert_rejected(path, "not valid JSON")
+
+
 # ---------------------------------------------------------------------------
 # (b) Semantic checks: R8-R13
 # ---------------------------------------------------------------------------

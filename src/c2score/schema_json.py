@@ -358,9 +358,9 @@ def _error_order(error: Any) -> list[tuple[int, Any]]:
 def load_schema_json(source: str | os.PathLike[str] | dict[str, Any]) -> Schema:
     """Read and validate a JSON schema.
 
-    ``source`` is either a path to a UTF-8 JSON file or an already parsed
-    ``dict``. Every violation of the schema format raises :class:`SchemaError`
-    with the offending location in the message.
+    ``source`` is either a path to a UTF-8 JSON file (with or without a byte
+    order mark) or an already parsed ``dict``. Every violation of the schema
+    format raises :class:`SchemaError` with the offending location in the message.
     """
     if isinstance(source, dict):
         data: Any = source
@@ -370,7 +370,8 @@ def load_schema_json(source: str | os.PathLike[str] | dict[str, Any]) -> Schema:
         with open(source, "rb") as f:
             raw = f.read()
         try:
-            text = raw.decode("utf-8")
+            # utf-8-sig also accepts a leading byte order mark, as some editors write one.
+            text = raw.decode("utf-8-sig")
         except UnicodeDecodeError as e:
             raise SchemaError(f"invalid schema ({origin}): not valid UTF-8: {e}") from e
         data = _parse_json(text, origin)
