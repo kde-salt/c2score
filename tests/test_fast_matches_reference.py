@@ -12,7 +12,7 @@ import random
 
 import pytest
 
-from c2score import _reference, evaluate
+from c2score import evaluate
 from c2score.cardinality import ONE_MANY, ONE_ONE, ZERO_MANY, ZERO_ONE, Cardinality
 from c2score.conciseness import _Shortcuts, conciseness, reduce_schema
 from c2score.coverage import CoverageTables
@@ -30,6 +30,8 @@ from c2score.model import (
     Schema,
 )
 from c2score.similarity import Similarity
+
+import reference_impl
 
 NODE_LABELS = ["A", "B", "C"]
 EDGE_LABELS = ["R", "S"]
@@ -160,7 +162,7 @@ def fast_conciseness(instance, schema, params):
 def test_fast_equals_reference(seed):
     instance, schema, params = example(seed)
     try:
-        expected = _reference.run(instance, schema, **params)
+        expected = reference_impl.run(instance, schema, **params)
     except SchemaError as e:
         with pytest.raises(SchemaError, match="allow_any=False"):
             evaluate(instance, schema, **params)

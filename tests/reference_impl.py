@@ -1,11 +1,10 @@
-"""The straightforward implementation of the evaluation, kept as a reference.
+"""The straightforward implementation of the evaluation, kept as a reference for the tests.
 
 This is the implementation that passed the hand-computed examples and the
 comparison with the earlier implementation before the evaluation was made
-fast. It
-flattens the schema again for every removed definition and computes every
-similarity densely. It is not part of the public API: the tests compare the
-fast :func:`c2score.evaluate` with :func:`evaluate` here.
+fast. It flattens the schema again for every removed definition and computes
+every similarity densely. This module is not installed with the package: the
+tests compare the fast :func:`c2score.evaluate` with :func:`evaluate` here.
 
 The similarity rules themselves (:mod:`c2score.similarity`) are shared.
 """
@@ -18,13 +17,13 @@ from typing import Optional, TypeVar
 
 import numpy as np
 
-from .conciseness import ConcisenessResult, Removal
-from .coverage import Match
-from .errors import SchemaError
-from .evaluate import EvaluationResult, _check_params, _result
-from .flatten import FlatEdgeType, FlatNodeType, FlatSchema
-from .model import EdgeTypeDef, FrozenDict, Instance, InstanceEdgeType, InstanceNodeType, PropertySpec, Schema, TypeDef
-from .similarity import SimilarityParams, sim_e, sim_v
+from c2score.conciseness import ConcisenessResult, Removal
+from c2score.coverage import Match
+from c2score.errors import SchemaError
+from c2score.evaluate import EvaluationResult, _check_params, _result
+from c2score.flatten import FlatEdgeType, FlatNodeType, FlatSchema
+from c2score.model import EdgeTypeDef, FrozenDict, Instance, InstanceEdgeType, InstanceNodeType, PropertySpec, Schema, TypeDef
+from c2score.similarity import SimilarityParams, sim_e, sim_v
 
 _T = TypeVar("_T")
 _S = TypeVar("_S")
