@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.1.0 (unreleased)
+## 0.1.1 (2026-10-14)
+
+### Changed
+
+- The README and the package description refer to the final title of the paper,
+  *C2-score: Evaluating Schema Fit to Property Graphs* (EDBT 2027).
+
+No changes to the code or to the scores.
+
+## 0.1.0 (2026-10-13)
 
 First release.
 

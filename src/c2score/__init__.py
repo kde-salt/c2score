@@ -1,4 +1,4 @@
-"""C2-score: quantitative quality evaluation of property graph schemas."""
+"""C2-score: evaluating how well a schema fits a property graph."""
 
 from importlib.metadata import version
 

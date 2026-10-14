@@ -12,8 +12,7 @@ C2-score is the harmonic mean of the two. Each score is also reported separately
 edges, together with the redundant definitions and the best-matching schema type for every type
 in the instance, so that you can see *why* a schema scores as it does.
 
-The measure is described in the paper *C2-score: Quantitative Quality Evaluation of Property Graph
-Schemas without Ground Truth* (EDBT 2027).
+The measure is described in the paper *C2-score: Evaluating Schema Fit to Property Graphs* (EDBT 2027).
 This library refines the definitions of the paper, so its scores can differ from those reported in
 the paper. To reproduce the results of the paper, use the artifact repository
 [kde-salt/C2-SCORE](https://github.com/kde-salt/C2-SCORE).
@@ -25,7 +24,7 @@ If you use c2score in your research, please cite:
 ```bibtex
 @inproceedings{yukawa2027c2score,
   author    = {Fusuke Yukawa and Hiroaki Shiokawa},
-  title     = {{C2-score}: Quantitative Quality Evaluation of Property Graph Schemas without Ground Truth},
+  title     = {{C2-score}: Evaluating Schema Fit to Property Graphs},
   booktitle = {Proceedings of the International Conference on Extending Database Technology (EDBT)},
   year      = {2027}
 }
